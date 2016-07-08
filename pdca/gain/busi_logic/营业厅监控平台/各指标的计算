@@ -1,0 +1,8 @@
+营业监测平台
+前三页
+
+过滤条件：
+M_busiName/M_QB_status/M_effective_time 三个指标必须都已经打上， M_QB_status != 3(即不包含未提交), 这里的 M_effective_time 是在前面用 total_seconds 算出来的, 所以单位是秒, 加上查询时间过滤即得到需要进行计算的数据
+
+分组依据：
+	无

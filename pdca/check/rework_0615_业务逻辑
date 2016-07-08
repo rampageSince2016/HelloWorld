@@ -1,0 +1,22 @@
+精确和模糊的判断标准是什么？
+精确表如果能查到就是精确否则就是模糊
+业务id号如果在精确表里则为精确，否则为模糊
+
+M_busiName、M_effective_time、M_vague_effetive_time、M_step_marked、M_subBsuTypeId、 M_busi_total_time、M_sys_total_time分别是怎么打的？
+M_busiName : 在EX_BUSINESS里还有一个字段为busiTypeId， 通过这个字段可以在维表DIM_BUSI_TYPE中找到相应的中文中字
+M_effective_time: 有效时长， 如果是查询，则直接把每个步骤的最晚响应时间 - 该步骤的最早请求时间
+
+
+
+
+====================================================================
+英语单词
+递归	recursion
+倾斜	shelve
+笛卡尔	cartesian
+算法	algorithm
+客户	customer
+交付	deliver
+权限	authority
+频率	frequency
+

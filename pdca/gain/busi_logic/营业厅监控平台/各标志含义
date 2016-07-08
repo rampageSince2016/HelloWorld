@@ -1,0 +1,146 @@
+M_BUSI_STEP_TYPE
+打标只针对BUSI_MONITOR库里的EX_BUSINESS
+
+是否是精确的判断标准： 如果在精确表里找得到这笔业务的id号，则说明这笔业务是精确匹配的业务（即专题业务）, 否则则是模糊的。
+
+M_busiName : 把维表里的业务类型名字复制到EX_BUSINESS里
+
+M_effective_time: 有效时间, 对于办理类的移动的人只关心最后一步的提交时长， 因为只有最后一步才会产生订单
+	def 模糊算法:
+		#模糊表里的stepList（三层中括号），其实跟精确表的 stepList 大体意思是一样的， 去掉第一层括号即为步骤， 不同的地方是模糊这里每一个 step 都还包含了更小粒度的 step ，就是还有两层中括号才到命令字 id, 精确表只剩一层中括号到命令字 id 
+		把从模糊表里查到的 stepList （三层中括号）， 里的每一最小粒度的步骤做为步骤构造成与精确表的 stepList (两层中括号) 结构一样的结构
+		对每一个步骤求最大响应时间 - 最小请求时间, 返回一个列表
+		返回列表求和, 返回结果
+
+	def 精确算法：
+		从精确表里找到相应的数据， 取stepList（两层）的最后一步, 并求出最大响应时间 - 最小响应时间, 返回结果
+
+	if 查询:
+		item = find_one({'_id': id})
+		stepList = item['stepList']
+		effective_time = 模糊算法(stepList)
+	else:
+		if statusId == 7:
+			effective_time = 0
+		elif statusId in (6, 8):
+			if 精确：
+				effective_time = 精确算法(stepList[-1])
+			else:
+				effective_time = 模糊算法(stepList[-1])
+
+M_vague_effective_time : 所有的时长都按模糊的算法进行计算
+	if 查询：
+		stepList = item['stepList']
+		vague_effective_time = 模糊算法(stepList)
+	else:
+		if statusId == 7:
+			vague_effective_time = 0
+		elif statusId in (6, 8):
+			vague_effective_time = 模糊算法(stepList[-1])
+		else:
+			raise Exception('unkown statusId')
+
+M_QB_status, M_Query:
+	SUCC = 0
+	SYS_FAIL = 1
+	BUSI_FAIL = 2
+	UNSUB = 0
+	Q_SYS_FAIL = 4
+	Q_BUSI_FAIL = 5
+	Q_SUCC = 6
+	
+	def judge_status:
+		if 查询：
+			if retCodeList in SYS_CODE:
+				return Q_SYS_FAIL
+			elif retCodeList in BUSI_CODE:
+				return Q_BUSI_FAIL
+			else:
+				return Q_SUCC
+		if 办理：
+			if retCodeList in SYS_CODE:
+				return SYS_FAIL
+			elif retCodeList in BUSI_CODE:
+				return BUSI_FAIL
+			else:
+				return SUCC
+	
+	if 查询：
+		mark = judge_status(busiRetCodeList, 查询)
+	else: 
+		if 精确：
+			if len(stepList) < len(DIM_ACCUR_TYPE.nameList):
+				mark = UNSUB
+			elif len(stepList) == len(DIM_ACCUR_TYPE.nameList):
+				mark = judge_status(stepList[-1], 办理)
+			else:
+				raie Exception
+		elif 办理：
+			if	busistatusId  == 7:
+				mark = UNSUB
+			elif busistatusId in (6, 8):
+				mark = judge_status(stepList[-1][-1], 办理)
+			else:
+				raise Exception
+		else:
+			raise Exception
+
+M_step_marked | M_step_wait_time | M_step_sys_time | M_step_status | M_sys_total_time | M_busi_total_time | M_subBusiTypeId 分别是什么含义?
+	M_step_marked: 判断按步骤打标的标是否已经打上
+		这里的标是要一起打的，要么一起打上，要么一起打不上。这个标只是用来判断这笔业务是否已经跑过这个逻辑了。	
+	M_step_wait_time: 每一步骤的等待时长
+		对于stepList， M_step_wait_time = 后一步最早请求时间 - 前一步最晚响应时间	
+		如果上面相减出来的时长小于0， 则时长就为0
+
+	M_step_sys_time: 每一步骤的系统时长
+		min(后一步最早请求时间, 当前步最晚响应时间) - 当前步最早请求时间 
+		为什么？
+		因为命令字有些步骤是并发的，可能下步先开始了但上一步还有些命令字还没有收到响应。
+
+		B_req_time = 后一步最早请求时间  
+		A_res_time = 上一步最晚响应时间 
+		A_req_time = 上一步最早请求时间 
+		B_time 为系统时长的后结点
+		A_time 为系统时长的前结点
+		if A_req_time < B_req_time < A_res_time:
+			B_time = B_req_time
+		if A_res_time < B_req_time and A_res_time < A_res_time: 
+			B_time = B_req_time
+		A_time = A_req_time
+		M_step_sys_time = B_time - A_time
+
+	M_step_status: 每一步骤的的状态
+		如果单步的返回状态在系统失败状态列表（数据分析师会给出）, 则返回0, 否则返回1
+
+	M_sys_total_time: 每一步骤的系统总时长
+		就是M_step_sys_time相加的结果 
+
+	M_busi_total_time: 每一步骤的业务总时长
+		stepList中所有命令字的最晚响应时间 - 最早请求时间 
+		
+	M_subBusiTypeId: 该业务对应的重点业务表的Id
+		用业务id在精确步骤表里找到数据，并把这数据中的subBusiTypeId记到EX_BUSINESS中
+
+系统时长与等待时长的定义:
+	[step1_startTime--step1--step1_endTime], [wait], [step2_startTime--step2--step2_endTime]
+	系统时长 = step1_endTime - step1_startTime + step2_endTime - step2_startTime
+	等待时长 = step2_startTime - step1_endTime
+
+模糊表stepList:
+	e.g. : [[[必要], [必要], [必要]], [[非必要], [非必要],[非必要]], [[必要], [必要], [必要]]]
+	模糊表已提交的最后一步一定是必要的, 并且必要和非必要的步骤都是分开的
+
+精确表stepList: 
+	e.g.: [[非必要], [必要], [非必要], [必要], [必要]]
+	目前精确表里必要和非必要步骤是混杂的, 已提交的最后一步一定是必要
+
+一个前提是计算时长都是用必要步骤来算的, 并且移动需求是算最后一步的时长
+	由于目前算系统时长都是用最后整一步的最晚响应时长-最早请求时长，所以目前的系统时长都包含了等待时长，所以比实际大很多。
+
+下一版本的精确表stepList:
+	e.g. : [{必要 : True, stepList: []}, {必要: False, stepList: []}]
+
+---------------------------------------------------version 1 end------------------------------------------------------------------
+
+---------------------------------------------------version 2 start----------------------------------------------------------------
+---------------------------------------------------version 2 end------------------------------------------------------------------

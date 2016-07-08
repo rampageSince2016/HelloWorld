@@ -1,0 +1,12 @@
+DataFrame怎么取其中几列做为一个新的DataFrame
+	使用df.iloc即可取出中间的几列出来， 并且取完后格式直接就是DataFrame
+	新问题:
+		如果要取出来的列不连续怎么办?
+
+对于一个全是int 或 float的DataFrame怎么快速算出每一列的最大值呢?
+	使用df.max(axis = 0)即可一次就算出每一列的最大值
+	axis = 1 即可一次算出每一行的最大值
+
+对于一个DataFrame， 只要对其中的一列进行apply的操作， 应该怎么做?
+	先把这一列取出来, (使用方法 loc iloc会得到一个单列的DataFrame, 使用ix得到一个series), 应用完函数所再赋值回去
+	如: df.loc[:, [1]] = df.loc[:, [1]].apply(func)

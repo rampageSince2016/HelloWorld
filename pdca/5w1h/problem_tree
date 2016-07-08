@@ -1,0 +1,10 @@
+what 问题是什么？
+树构造不了。构造逻辑是什么？
+	使用treelib, 每一个节点要进行创建，create_node, 
+为什么 create_node不了?
+	node id 如果用数据库里每张表的id 号则会有重复， 而treelib的node id 是不能重复的。
+
+
+那么问题是node id应该怎么生成
+
+

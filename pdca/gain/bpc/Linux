@@ -1,0 +1,24 @@
+apt命令集合:
+	apt-get install tcpdump 安装
+	apt-cache search tcpdump 查找 
+	apt-cache depends tcpdump 就可以查看要安装的包的依赖关系
+
+
+
+加载新硬盘:
+	fdisk -l : 查看硬盘有没有加到逻辑盘里
+	fdisk /dev/sdb(假设这块就是新加的硬盘) 如果要分区就用这条命令， 如果整块一起用的话就直接跳过这一步
+	mkfs -t ext3 -c /dev/sdb: 格式化磁盘，不格式化就挂载会出大问题
+	开机自动挂载设置方法:
+		vim /etc/fstab 
+		最后一行加入
+		/dev/sdb	/opt(挂载目标地址)	ext3	defaults	1	2
+		重启电脑即可
+
+
+永久修改网卡信息
+	centos: /etc/sysconfig/network-scripts/ifcfg-eth0
+	ubuntu: /etc/network/interfaces
+
+host文件存放位置:
+	/etc/hosts

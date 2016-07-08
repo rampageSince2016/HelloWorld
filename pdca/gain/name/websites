@@ -1,0 +1,20 @@
+vim: 
+http://mirnazim.org/writings/vim-plugins-i-use/
+
+
+-------------------------------------------------
+
+
+
+
+
+配置vim
+./configure --with-features=huge --enable-multibyte  --disable-pythoninterp --enable-python3interp=dynamic vi_cv_path_python3=/home/csxxf/anaconda3/bin/python --with-python3-config-dir=/home/csxxf/anaconda3/lib  --enable-gui=gtk2 --enable-cscope --enable-fail-if-missing --prefix=/usr
+安装目录
+make VIMRUNTIMEDIR=?
+
+http://mirnazim.org/writings/vim-plugins-i-use/
+http://vimconfig.com/
+https://github.com/Valloric/YouCompleteMe/wiki/Building-Vim-from-source
+
+

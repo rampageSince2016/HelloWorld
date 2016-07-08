@@ -1,0 +1,3 @@
+sqlite3如何让查出来的数据包含有字段名?
+	(1)dictCursor(mysql用的)
+	(2)factory.row(sqlite3用这个)
