@@ -1,0 +1,7 @@
+_id,name,name_zh
+1,oneLineBox,单行输入框
+2,multiLineBox,多行输入框
+3,dropDownList,下拉列表
+4,checkBox,多选
+5,radioBox,单选
+6,attachment,附件

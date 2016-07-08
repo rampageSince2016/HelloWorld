@@ -1,0 +1,5 @@
+value,name,type_id,_id,attr_set_id
+,attr1,1,1,1
+,attr2,2,2,2
+rampage,attr3,3,3,1
+test,attr4,6,4,2

@@ -1,0 +1,4 @@
+_id,name,type_id,value,attr_set_id
+1,attr1,1,,1
+2,attr2,2,,2
+3,attr3,3,,2
