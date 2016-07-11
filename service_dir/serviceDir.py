@@ -14,12 +14,13 @@ DB_INFO = {
 class Const:
     DATA_IN = './importDir'
     DATA_OUT = './exportDir'
-    FACT_SERVICE = {'tabName': 'FACT_SERVICE', 'foreignKey': 'service_dir_id'}
-    FACT_SCENE = {'tabName': 'FACT_SCENE', 'foreignKey': 'service_id'}
-    FACT_ATTR_SET = {'tabName': 'FACT_ATTR_SET', 'foreignKey': 'scene_id'}
-    FACT_ATTR = {'tabName': 'FACT_ATTR', 'foreignKey': 'attr_set_id'}
-    FACT_SERVICE_DIR = {'tabName': 'FACT_SERVICE_DIR', 'foreignKey': None}
+    FACT_SERVICE = {'tabName': 'FACT_SERVICE', 'foreignKey': 'service_dir_id', '_id': '_id'}
+    FACT_SCENE = {'tabName': 'FACT_SCENE', 'foreignKey': 'service_id', '_id': '_id'}
+    FACT_ATTR_SET = {'tabName': 'FACT_ATTR_SET', 'foreignKey': 'scene_id', '_id': '_id'}
+    FACT_ATTR = {'tabName': 'FACT_ATTR', 'foreignKey': 'attr_set_id', '_id': '_id'}
+    FACT_SERVICE_DIR = {'tabName': 'FACT_SERVICE_DIR', 'foreignKey': '_id', '_id': '_id'}
     SEQ = [
+            FACT_SERVICE_DIR,
             FACT_SERVICE,
             FACT_SCENE,
             FACT_ATTR_SET,
@@ -112,6 +113,7 @@ class ServiceDir:
         finally:
             self.close()
 
+
     def all_tree_sql(self):
         L_SERVICE = {'$lookup':{
             'from': 'FACT_SERVICE',
@@ -119,16 +121,37 @@ class ServiceDir:
             'foreignField': Const.FACT_SERVICE['foreignKey'],
             'as': 'service'
         }}
-        U_SERVICE = {'$unwind': {'path': '$service'}}
+        U_SERVICE = {'$unwind': {'path': '$service', 'preserveNullAndEmptyArrays': True }}
         L_SCENE = {'$lookup':{
             'from': 'FACT_SCENE',
             'localField': 'service._id',
             'foreignField':Const.FACT_SCENE['foreignKey'],
             'as': 'scene'
         }}
-        U_SCENE = {'$unwind': {'path': '$scene'}}
-        nosql = [L_SERVICE, U_SERVICE, L_SCENE, U_SCENE]
+        U_SCENE = {'$unwind': {'path': '$scene', 'preserveNullAndEmptyArrays': True }}
+        L_ATTR_SET = {'$lookup': {
+            'from': 'FACT_ATTR_SET',
+            'localField': 'scene._id',
+            'foreignField': Const.FACT_ATTR_SET['foreignKey'],
+            'as': 'attr_set'
+        }}
+        U_ATTR_SET = {'$unwind': {
+            'path': '$attr_set',
+            'preserveNullAndEmptyArrays': True
+        }}
+        L_ATTR = {'$lookup': {
+            'from': 'FACT_ATTR',
+            'localField': 'attr_set._id',
+            'foreignField': Const.FACT_ATTR['foreignKey'],
+            'as': 'attr'
+        }}
+        U_ATTR = {'$unwind': {
+            'path'    : '$attr',
+            'preserveNullAndEmptyArrays': True
+        }}
+        nosql = [L_SERVICE, U_SERVICE, L_SCENE, U_SCENE, L_ATTR_SET, U_ATTR_SET, L_ATTR, U_ATTR]
         return nosql
+
 
     def generate_dir_tree(self, treeList):
         t = FlexTree()
@@ -158,13 +181,60 @@ class ServiceDir:
                     t.create_node(node_name, treePathLink, parent=parent_path, data=treeIdPath)
         return t
             
+    def generate_leaf_tree(self, treeList):
+        t = FlexTree()
+        t.create_node('root', 'root', data='root')
+        if len(treeList) < 1:
+            return 
+        for item in treeList:
+            treePath = [
+                    item.get('name'), 
+                    item.get('service', {}).get('name'),
+                    item.get('scene', {}).get('name'),
+                    item.get('attr_set', {}).get('name'),
+                    item.get('attr', {}).get('name')
+            ]
+            idPath = [
+                    str(item.get('_id')),
+                    str(item.get('service', {}).get('_id')),
+                    str(item.get('scene', {}).get('_id')),
+                    str(item.get('attr_set', {}).get('_id')),
+                    str(item.get('attr', {}).get('_id'))
+            ]
+            while None in treePath:
+                treePath.remove(None)
+            while None in idPath:
+                idPath.remove(None)
+            for i in range(1, len(treePath) + 1):
+                treePathLink = os.path.sep.join(['root'] + treePath[:i])
+                treeIdPath = os.path.sep.join(['root'] + idPath[:i])
+                if not t.get_node(treePathLink):
+                    parent_path, node_name = os.path.split(treePathLink)
+                    t.create_node(node_name, treePathLink, parent=parent_path, data=treeIdPath)
+        return t
+
+    def get_dir_tree(self,to_dict=True):
+        self.connectMongo()
+        try:
+            nosql = self.all_tree_sql()
+            rs = self.find(Const.FACT_SERVICE_DIR['tabName'], nosql = nosql)
+            tree = self.generate_dir_tree(rs)
+            if tree:
+                if to_dict:
+                    return tree.to_dict(with_data=True)
+                else:
+                    return tree
+            else:
+                return None
+        finally:
+            self.close()
 
     def get_tree(self,to_dict=True):
         self.connectMongo()
         try:
             nosql = self.all_tree_sql()
             rs = self.find(Const.FACT_SERVICE_DIR['tabName'], nosql = nosql)
-            tree = self.generate_dir_tree(rs)
+            tree = self.generate_leaf_tree(rs)
             if tree:
                 if to_dict:
                     return tree.to_dict(with_data=True)
@@ -182,17 +252,16 @@ class ServiceDir:
             tree = self.get_tree(to_dict=False)
             nodes = set(list(tree.nodes.values()))
             leaves = set(tree.leaves())
-            nodeList = list(nodes)
             node_leaf_set = nodes | leaves
             to_be_del = filter(lambda x: x.data.startswith(tree_index), node_leaf_set)
             for item in to_be_del:
                 node_values = [int(i) for i in item.data.split(os.path.sep) if i != 'root' ]
-                key_values = tuple(zip([y['foreignKey'] for y in Const.SEQ], node_values))
+                key_values = tuple(zip([y['_id'] for y in Const.SEQ], node_values))
                 if len(key_values) < 1:
                     raise Exception('传入的tree_index解析出错')
                 last_one = key_values[-1]
                 match = {last_one[0]: last_one[1]}
-                table = list(filter(lambda z: z['foreignKey'] == last_one[0], Const.SEQ))[0]['tabName']
+                table = Const.SEQ[len(key_values) - 1]['tabName']
                 self.db[table].remove(match)
         finally:
             self.close()
@@ -202,13 +271,68 @@ class ServiceDir:
         self.connectMongo()
         try:
             ids = [int(i) for i in parent_id.split(os.path.sep) if i != 'root']
-            key_values = tuple(zip([y['foreignKey'] for y in Const.sep], ids))
+            if not ids:
+                table = Const.SEQ[0]['tabName']
+                idx = None
+                nosql = [{'$group':{
+                    '_id': None,
+                    'id': {'$max': '$_id'}
+                    }}]
+                idxList = list(self.find(table, nosql = nosql))
+                if len(idxList) < 1:
+                    idx = 1
+                else:
+                    idx = idxList[0]['id'] + 1
+                item = {'_id': idx, 'name': node_name}
+                self.db[table].insert(item)
+                return
+            key_values = tuple(zip([y['_id'] for y in Const.SEQ], ids))
             last_one = key_values[-1]
-            match = {last_one[0]: last_one[1]}
-            if len(key_values) == len(Const.SEQ):
+            if len(key_values) >= len(Const.SEQ):
                 raise Exception('叶子上加不了节点')
             table = Const.SEQ[len(key_values)]['tabName']
-            
+            foreignKey = Const.SEQ[len(key_values)]['foreignKey']
+            idx = None
+            nosql = [{'$group':{
+                '_id': None,
+                'id': {'$max': '$_id'}
+                }}]
+            idxList = list(self.find(table, nosql = nosql))
+            if len(idxList) < 1:
+                idx = 1
+            else:
+                idx = idxList[0]['id'] + 1
+            item = {'_id': idx, foreignKey: last_one[1], 'name': node_name}
+            self.db[table].insert(item)
         finally:
             self.close()
+
+
+    def modify_branch(self, node_id, new_val_dict):
+        self.connectMongo()
+        try:
+            ids = [int(i) for i in node_id.split(os.path.sep) if i != 'root']
+            if ids:
+                name_id_match = tuple(zip([y['_id'] for y in Const.SEQ], ids))
+                last_one = name_id_match[-1]
+                table = Const.SEQ[len(name_id_match) - 1]['tabName']
+                print(table)
+                new_val_dict['_id'] = ids[-1]
+                print(new_val_dict)
+                self.db[table].update({
+                    '_id': ids[-1]
+                }, {    
+                    '$set': new_val_dict
+                })
+            else:
+                raise Exception('不能对root节点进行修改')
+        except:
+            self.close()
+
+
+if __name__ == '__main__':
+    sd = ServiceDir()
+    sd.connectMongo()
+    sd.client.drop_database(DB_INFO['DB_NAME'])
+    sd.importTab()
                 

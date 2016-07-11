@@ -20,6 +20,8 @@ def setUp():
     SD = sd()
     os.system('rm -rf importDir')
     shutil.copytree('importDirBak','importDir')
+    client.drop_database(DB_INFO['DB_NAME'])
+    SD.importTab()
 
 def tearDown():
     global client
@@ -77,12 +79,72 @@ class ServiceDirTest(TestCase):
         rs = SD.del_branch('root/2')
         tree = SD.get_tree(to_dict=False)
         tree.show()
-        self.assertNotIn('root/2', tree.nodes)
+        node_values = [i.data for i in tree.nodes.values()]
+        self.assertNotIn('root/2', node_values)
 
         #删除叶子
         rs = SD.del_branch('root/1/1/1')
         tree = SD.get_tree(to_dict=False)
         tree.show()
-        self.assertNotIn('root/1/1/1', tree.nodes)
-        self.assertTrue(False)
+        node_values = [i.data for i in tree.nodes.values()]
+        self.assertNotIn('root/1/1/1', node_values)
+        #self.assertTrue(False)
+
+    def test_create_branch(self):
+        #增加叶子
+        SD.create_branch('root/1/1', 'test_scene')
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/目录1/服务1/test_scene', [i for i in t.nodes])
+
+        #增加中间节点
+        SD.create_branch('root/1', 'test_service')
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/目录1/test_service', [i for i in t.nodes])
+
+        #增加最上层节点
+        SD.create_branch('root', 'test_service_dir')
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/test_service_dir', [i for i in t.nodes])
+
+    def test_modify_branch(self):
+        #这个函数是对节点进行测试，还需要另一个函数对属性进行测试 
+        node_id = 'root/1/1'
+        new_val_dict = {'_id': 1, 'name': '特殊服务1', 'service_dir_id': 1}
+        SD.modify_branch(node_id, new_val_dict)
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/目录1/特殊服务1', [i for i in t.nodes])
+
+        #if the _id is changed by client which is not allowed
+        new_val_dict = {'_id': 2, 'name': '特殊服务1', 'service_dir_id': 1}
+        SD.modify_branch(node_id, new_val_dict)
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/目录1/特殊服务1', [i for i in t.nodes])
+
+        #change the parent directory
+        new_val_dict = {'_id': 1, 'name': '特殊服务1', 'service_dir_id': 2}
+        SD.modify_branch(node_id, new_val_dict)
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/目录2/特殊服务1', [i for i in t.nodes])
+
+    def test_modify_attr(self):
+        node_id = 'root/1/1/1/1/1'
+        new_val_dict = {'_id': 1, 'name':'属性1', 'type_id': 1, 'value': 100,
+                'attr_set_id': 1}
+        SD.modify_branch(node_id, new_val_dict)
+        t = SD.get_tree(to_dict=False)
+        t.show()
+        print([i for i in t.nodes])
+        self.assertIn('root/目录1/服务1/scene1/attr_set1/属性1', [i for i in t.nodes])
 
