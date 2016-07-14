@@ -2,6 +2,8 @@ from pymongo import MongoClient
 from pprint import pprint
 from treelib import Tree
 
+import msgpack
+import json
 import os
 import csv
 
@@ -14,6 +16,7 @@ DB_INFO = {
 class Const:
     DATA_IN = './importDir'
     DATA_OUT = './exportDir'
+    DIM_TYPE = {'tabName': 'DIM_TYPE'}
     FACT_SERVICE = {'tabName': 'FACT_SERVICE', 'foreignKey': 'service_dir_id', '_id': '_id'}
     FACT_SCENE = {'tabName': 'FACT_SCENE', 'foreignKey': 'service_id', '_id': '_id'}
     FACT_ATTR_SET = {'tabName': 'FACT_ATTR_SET', 'foreignKey': 'scene_id', '_id': '_id'}
@@ -59,9 +62,10 @@ class FlexTree(Tree):
             return tree_dict
 
 
-class ServiceDir:
-    client = None
-    db = None
+class MongoBase:
+    def __init__(self):
+        self.client = None
+        self.db = None
 
     def connectMongo(self):
         self.client = MongoClient(DB_INFO['MONGO_HOST'], DB_INFO['MONGO_PORT'])
@@ -74,11 +78,16 @@ class ServiceDir:
             raise
 
     def find(self, table, match=None, project=None, nosql=None):
-        if match:
-            rs = list(self.db[table].find(match, project))
-        elif nosql:
+        if nosql:
             rs = list(self.db[table].aggregate(nosql))
+        else:
+            rs = list(self.db[table].find(match, project))
         return rs
+
+
+class ServiceDir(MongoBase):
+    def __init__(self):
+        super().__init__()
 
     def createIdx(self):
         self.db[Const.FACT_SERVICE['tabName']].ensure_index(Const.FACT_SERVICE['foreignKey'])
@@ -88,7 +97,15 @@ class ServiceDir:
 
         
     def exportTab(self):
-        pass
+        self.connectMongo()
+        try:
+            for tab in self.db.collection_names():
+                fpath = os.path.sep.join([os.path.abspath(Const.DATA_OUT), tab])
+                with open(fpath, 'w') as f_out:
+                    pass
+                list(self.find())
+        finally:
+            self.close()
         
 
     def importTab(self):
@@ -155,7 +172,7 @@ class ServiceDir:
 
     def generate_dir_tree(self, treeList):
         t = FlexTree()
-        t.create_node('root', 'root', data='root')
+        t.create_node('root', 'root', data=('root', ))
         if len(treeList) < 1:
             return 
         for item in treeList:
@@ -178,12 +195,12 @@ class ServiceDir:
                 treeIdPath = os.path.sep.join(['root'] + idPath[:i])
                 if not t.get_node(treePathLink):
                     parent_path, node_name = os.path.split(treePathLink)
-                    t.create_node(node_name, treePathLink, parent=parent_path, data=treeIdPath)
+                    t.create_node(node_name, treePathLink, parent=parent_path, data=(treeIdPath,item.get('value')))
         return t
             
     def generate_leaf_tree(self, treeList):
         t = FlexTree()
-        t.create_node('root', 'root', data='root')
+        t.create_node('root', 'root', data=('root',))
         if len(treeList) < 1:
             return 
         for item in treeList:
@@ -210,7 +227,7 @@ class ServiceDir:
                 treeIdPath = os.path.sep.join(['root'] + idPath[:i])
                 if not t.get_node(treePathLink):
                     parent_path, node_name = os.path.split(treePathLink)
-                    t.create_node(node_name, treePathLink, parent=parent_path, data=treeIdPath)
+                    t.create_node(node_name, treePathLink, parent=parent_path, data=(treeIdPath, item.get('attr', {}).get('value')))
         return t
 
     def get_dir_tree(self,to_dict=True):
@@ -253,9 +270,9 @@ class ServiceDir:
             nodes = set(list(tree.nodes.values()))
             leaves = set(tree.leaves())
             node_leaf_set = nodes | leaves
-            to_be_del = filter(lambda x: x.data.startswith(tree_index), node_leaf_set)
+            to_be_del = filter(lambda x: x.data[0].startswith(tree_index), node_leaf_set)
             for item in to_be_del:
-                node_values = [int(i) for i in item.data.split(os.path.sep) if i != 'root' ]
+                node_values = [int(i) for i in item.data[0].split(os.path.sep) if i != 'root' ]
                 key_values = tuple(zip([y['_id'] for y in Const.SEQ], node_values))
                 if len(key_values) < 1:
                     raise Exception('传入的tree_index解析出错')
@@ -316,9 +333,7 @@ class ServiceDir:
                 name_id_match = tuple(zip([y['_id'] for y in Const.SEQ], ids))
                 last_one = name_id_match[-1]
                 table = Const.SEQ[len(name_id_match) - 1]['tabName']
-                print(table)
                 new_val_dict['_id'] = ids[-1]
-                print(new_val_dict)
                 self.db[table].update({
                     '_id': ids[-1]
                 }, {    
@@ -329,10 +344,57 @@ class ServiceDir:
         except:
             self.close()
 
+paramMap = dict()
+def ajax_serviceDir_query():
+    paramMap = {'level': 5}
+    level = paramMap.get('level')
+    if not level:
+         raise Exception('没有传入目录列表的层次序号')
+    sd = ServiceDir()
+    tree = sd.get_tree(to_dict=False)
+    tree.show()
+    data = [(tree.level(i.identifier),i) for i in tree.nodes.values()]
+    data = sorted(filter(lambda y: y[0] == int(level), data), key = lambda x: x[0])
+    return [{'text': i[1].tag, '_id':i[1].data[0], 'value': i[1].data[1]} for i in data]
+
+def ajax_serviceDir_modify():
+    new_val_dict = {'_id': 1, 'name':'属性1', 'type_id': 1, 'value': 100, 'attr_set_id': 1}
+    paramMap = {'_id': 'root/1/1/1/1', 'set_value': new_val_dict}
+    sd = ServiceDir()
+    _id = paramMap.get('_id')
+    set_value = paramMap.get('set_value')
+    if not _id or not set_value:
+        raise Exception('输入参数为空')
+    sd.modify_branch(_id, set_value)
+
+def ajax_serviceDir_del():
+    paramMap = {'_id': 'root/1/1/1'}
+    _id = paramMap.get('_id')
+    if not _id:
+        raise Exception('输入参数为空')
+    sd = ServiceDir()
+    sd.del_branch(_id)
+
+def ajax_serviceDir_create():
+    paramMap = {'_id': 'root', 'node_name': '新增'}
+    _id = paramMap['_id']
+    node_name = paramMap['node_name']
+    sd = ServiceDir()
+    sd.create_branch(_id, node_name)
+
+def ajax_serviceDir_Types():
+    mb = MongoBase()
+    mb.connectMongo()
+    try:
+        rs = mb.find(Const.DIM_TYPE['tabName'])
+        return rs
+    finally:
+        mb.close()
+    
 
 if __name__ == '__main__':
     sd = ServiceDir()
     sd.connectMongo()
     sd.client.drop_database(DB_INFO['DB_NAME'])
     sd.importTab()
-                
+    #pprint(ajax_serviceDir_Types())
