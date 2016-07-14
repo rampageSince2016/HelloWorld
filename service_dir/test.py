@@ -79,14 +79,14 @@ class ServiceDirTest(TestCase):
         rs = SD.del_branch('root/2')
         tree = SD.get_tree(to_dict=False)
         tree.show()
-        node_values = [i.data for i in tree.nodes.values()]
+        node_values = [i.data[1] for i in tree.nodes.values()]
         self.assertNotIn('root/2', node_values)
 
         #删除叶子
         rs = SD.del_branch('root/1/1/1')
         tree = SD.get_tree(to_dict=False)
         tree.show()
-        node_values = [i.data for i in tree.nodes.values()]
+        node_values = [i.data[1] for i in tree.nodes.values()]
         self.assertNotIn('root/1/1/1', node_values)
         #self.assertTrue(False)
 
