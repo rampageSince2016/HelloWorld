@@ -1,16 +1,31 @@
 from bs4 import BeautifulSoup as bs
 
 import requests
+import os
+import traceback
+import random
 
 class Const:
     count = 0
-    EW_PATH = '../pdca/gain/EnglishWords'
+    EW_PATH = '../pdca/gain/English'
     DOLIST = list()
     ERRLIST = list()
 
     @classmethod
     def init_data(cls):
-        with open(Const.EW_PATH, 'r') as f:
+        if not os.path.exists(Const.EW_PATH):
+            raise Exception('{} not found!'.format(Const.EW_PATH))
+        L = [i for i in os.listdir(Const.EW_PATH)]
+        girl_nums = range(1, len(L) + 1)
+        selector = list(zip(girl_nums, sorted(L)))
+        for item in selector:
+            print('\t{}\t:\t{}'.format(*item))
+        print('\tother\t:\trandom select')
+        lucky_one = input('select a girl to dance:')
+        if (not lucky_one) or (lucky_one not in girl_nums):
+            lucky_one = random.choice(girl_nums)
+        lucky_one = os.path.sep.join([Const.EW_PATH, selector[int(lucky_one) - 1][1]])
+        with open(lucky_one, 'r') as f:
             for line in f:
                 k = line.split(':')[0].strip()
                 if k:
@@ -41,7 +56,18 @@ def check_value(answer, fact):
         return True
     return False
 
+def select_data():
+    try:
+        Const.init_data()
+    except:
+        print(traceback.format_exc())
+        return False
+    else:
+        return True
+
 def menu2():
+    if not select_data():
+        return
     for item in set(Const.DOLIST):
         core(item)
     while len(Const.ERRLIST) > 0:
@@ -52,7 +78,6 @@ def loopInput():
     def dis_menu():
         print('='*60 + '\n1. 英->汉\n2. 汉->英\n' + '='*60)
 
-    Const.init_data()
     dis_menu()
     while 1: 
         in_text = input('>>> ')
