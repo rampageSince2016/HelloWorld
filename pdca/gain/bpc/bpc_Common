@@ -11,3 +11,12 @@
 Administractor: bac2009
 
 liangzhaolan: Gmcc1234
+
+99禅道启动关闭方法
+	/opt/lampp/xampp start
+	/opt/lampp/xampp stop
+
+99开机运行:
+	rc5.d:
+		把bpc和及其对应的mongod禁止了开机启动
+		S98zen_tao即为禅道的开机自启动

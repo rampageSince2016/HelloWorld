@@ -22,3 +22,9 @@ apt命令集合:
 
 host文件存放位置:
 	/etc/hosts
+
+linux remote visit each other without password:
+	HOST A:
+	ssh-keygen
+	ssh-copy-id user@HOST_B
+	
