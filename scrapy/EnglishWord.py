@@ -13,6 +13,8 @@ class Const:
 
     @classmethod
     def init_data(cls):
+        cls.DOLIST = list()
+        cls.ERRLIST = list()
         if not os.path.exists(Const.EW_PATH):
             raise Exception('{} not found!'.format(Const.EW_PATH))
         L = [i for i in os.listdir(Const.EW_PATH)]
