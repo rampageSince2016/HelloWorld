@@ -20,6 +20,10 @@ apt命令集合:
 	centos: /etc/sysconfig/network-scripts/ifcfg-eth0
 	ubuntu: /etc/network/interfaces
 
+重启网卡
+	ubuntu: /etc/init.d/networking restart
+	centos: service network restart
+
 host文件存放位置:
 	/etc/hosts
 
