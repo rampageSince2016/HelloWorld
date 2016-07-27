@@ -1,5 +1,4 @@
-name,attr_set_id,_id,value,type_id
-attr1,1,1,xxx,1
-attr2,2,2,yyy,2
-attr3,1,3,rampage,3
-attr4,2,4,test,6
+_id,name,type_id,value,attr_set_id
+1,attr1,1,xxx,1
+2,attr2,2,yyy,2
+3,attr3,3,zzz,2

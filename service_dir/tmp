@@ -1,5 +1,0 @@
-from pymongo import MongoClient
-client = MongoClient('localhost', 27019, {strict})
-cop = client.COP
-cop.FACT_SCENE.remove({'_id':3})
-print(cop.FACT_SCENE.count())

@@ -23,7 +23,7 @@ class Const:
         for item in selector:
             print('\t{}\t:\t{}'.format(*item))
         print('\tother\t:\trandom select')
-        lucky_one = input('select a girl to dance:')
+        lucky_one = int(input('select a girl to dance:'))
         if (not lucky_one) or (lucky_one not in girl_nums):
             lucky_one = random.choice(girl_nums)
         lucky_one = os.path.sep.join([Const.EW_PATH, selector[int(lucky_one) - 1][1]])
@@ -67,14 +67,17 @@ def select_data():
     else:
         return True
 
-def menu2():
-    if not select_data():
-        return
+def do_it():
     for item in set(Const.DOLIST):
         core(item)
     while len(Const.ERRLIST) > 0:
         for item in Const.ERRLIST:
             core(item)
+
+def menu2():
+    if not select_data():
+        return
+    do_it()
 
 def loopInput():
     def dis_menu():
@@ -91,6 +94,9 @@ def loopInput():
             print('not supported yet!')
         elif in_text.strip() == '2':
             menu2()
+        elif in_text.strip() == 'redo':
+            if len(Const.DOLIST) > 0:
+                do_it()
         else:
             print('no such an item, please input again!')
 

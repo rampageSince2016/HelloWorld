@@ -4,31 +4,36 @@ from treelib import Tree
 
 import msgpack
 import json
-import os
+import os, shutil
 import csv
 
 DB_INFO = {
         'MONGO_HOST': 'localhost',
         'MONGO_PORT': 27019,
-        'DB_NAME': 'COP'
+        'DB_NAME': 'COP',
+        'CACHE_DB_NAME': 'CACHE_COP'
+}
+
+BCP_TTR_DIRS = {
+        'INTF': ''
 }
 
 class Const:
     DATA_IN = './importDir'
     DATA_OUT = './exportDir'
+    TTR_IN = '/home/csxxf/work/ttr'
     DIM_TYPE = {'tabName': 'DIM_TYPE'}
-    FACT_SERVICE = {'tabName': 'FACT_SERVICE', 'foreignKey': 'service_dir_id', '_id': '_id'}
+    FACT_SERVICE = {'tabName': 'FACT_SERVICE', '_id': '_id'}
     FACT_SCENE = {'tabName': 'FACT_SCENE', 'foreignKey': 'service_id', '_id': '_id'}
     FACT_ATTR_SET = {'tabName': 'FACT_ATTR_SET', 'foreignKey': 'scene_id', '_id': '_id'}
     FACT_ATTR = {'tabName': 'FACT_ATTR', 'foreignKey': 'attr_set_id', '_id': '_id'}
-    FACT_SERVICE_DIR = {'tabName': 'FACT_SERVICE_DIR', 'foreignKey': '_id', '_id': '_id'}
     SEQ = [
-            FACT_SERVICE_DIR,
             FACT_SERVICE,
             FACT_SCENE,
             FACT_ATTR_SET,
             FACT_ATTR
     ]
+
 
 class FlexTree(Tree):
     def to_dict(self, nid=None, key=None, sort=True, reverse=False, with_data=False):
@@ -66,10 +71,12 @@ class MongoBase:
     def __init__(self):
         self.client = None
         self.db = None
+        self.baseDb = None
 
     def connectMongo(self):
         self.client = MongoClient(DB_INFO['MONGO_HOST'], DB_INFO['MONGO_PORT'])
-        self.db = self.client[DB_INFO['DB_NAME']]
+        self.db = self.client[DB_INFO['CACHE_DB_NAME']]
+        self.baseDb = self.client[DB_INFO['DB_NAME']]
 
     def close(self):
         try:
@@ -85,12 +92,44 @@ class MongoBase:
         return rs
 
 
-class ServiceDir(MongoBase):
+class Authority:
+    def __init__(self):
+        pass
+
+    def check_write(self, user):
+        if os.path.exists('dir_service_lock'):
+            return False
+        return True
+
+class MongoTransaction(MongoBase):
+    def __init__(self):
+        super().__init__()
+
+    def check_cache(self, user):
+        self.connectMongo()
+        try:
+            pass
+        finally:
+            self.close()
+
+    def commit(self, user):
+        pass
+
+    def acquired(self, user):
+        pass
+
+    def release(self, user):
+        pass
+
+    def save(self, user, data):
+        pass
+
+
+class ServiceDir(MongoTransaction):
     def __init__(self):
         super().__init__()
 
     def createIdx(self):
-        self.db[Const.FACT_SERVICE['tabName']].ensure_index(Const.FACT_SERVICE['foreignKey'])
         self.db[Const.FACT_SCENE['tabName']].ensure_index(Const.FACT_SCENE['foreignKey'])
         self.db[Const.FACT_ATTR_SET['tabName']].ensure_index(Const.FACT_ATTR_SET['foreignKey'])
         self.db[Const.FACT_ATTR['tabName']].ensure_index(Const.FACT_ATTR['foreignKey'])
@@ -119,7 +158,7 @@ class ServiceDir(MongoBase):
                             if k.find('id') > -1:
                                 row[k] = int(v)
                         if self.find(f, match = {'_id': row['_id']}):
-                            self.db[f].update({
+                            self.baseDb[f].update({
                                 '_id' : row['_id']
                                 }, {
                                     '$set': row
@@ -132,16 +171,9 @@ class ServiceDir(MongoBase):
 
 
     def all_tree_sql(self):
-        L_SERVICE = {'$lookup':{
-            'from': 'FACT_SERVICE',
-            'localField': '_id',
-            'foreignField': Const.FACT_SERVICE['foreignKey'],
-            'as': 'service'
-        }}
-        U_SERVICE = {'$unwind': {'path': '$service', 'preserveNullAndEmptyArrays': True }}
         L_SCENE = {'$lookup':{
             'from': 'FACT_SCENE',
-            'localField': 'service._id',
+            'localField': '_id',
             'foreignField':Const.FACT_SCENE['foreignKey'],
             'as': 'scene'
         }}
@@ -166,7 +198,7 @@ class ServiceDir(MongoBase):
             'path'    : '$attr',
             'preserveNullAndEmptyArrays': True
         }}
-        nosql = [L_SERVICE, U_SERVICE, L_SCENE, U_SCENE, L_ATTR_SET, U_ATTR_SET, L_ATTR, U_ATTR]
+        nosql = [L_SCENE, U_SCENE, L_ATTR_SET, U_ATTR_SET, L_ATTR, U_ATTR]
         return nosql
 
 
@@ -178,12 +210,10 @@ class ServiceDir(MongoBase):
         for item in treeList:
             treePath = [
                     item.get('name'), 
-                    item.get('service', {}).get('name'),
                     item.get('scene', {}).get('name')
             ]
             idPath = [
                     str(item.get('_id')),
-                    str(item.get('service', {}).get('_id')),
                     str(item.get('scene', {}).get('_id'))
             ]
             while None in treePath:
@@ -206,14 +236,12 @@ class ServiceDir(MongoBase):
         for item in treeList:
             treePath = [
                     item.get('name'), 
-                    item.get('service', {}).get('name'),
                     item.get('scene', {}).get('name'),
                     item.get('attr_set', {}).get('name'),
                     item.get('attr', {}).get('name')
             ]
             idPath = [
                     str(item.get('_id')),
-                    str(item.get('service', {}).get('_id')),
                     str(item.get('scene', {}).get('_id')),
                     str(item.get('attr_set', {}).get('_id')),
                     str(item.get('attr', {}).get('_id'))
@@ -250,7 +278,7 @@ class ServiceDir(MongoBase):
         self.connectMongo()
         try:
             nosql = self.all_tree_sql()
-            rs = self.find(Const.FACT_SERVICE_DIR['tabName'], nosql = nosql)
+            rs = self.find(Const.FACT_SERVICE['tabName'], nosql = nosql)
             tree = self.generate_leaf_tree(rs)
             if tree:
                 if to_dict:
@@ -343,6 +371,50 @@ class ServiceDir(MongoBase):
                 raise Exception('不能对root节点进行修改')
         except:
             self.close()
+
+class FileMgr:
+    def list_dir(self, dir_name):
+        if os.path.exists(dir_name):
+            file_path_list = sorted(list(map(lambda f: os.path.sep.join([dir_name, f]), os.listdir(dir_name))))
+            return file_path_list
+        raise Exception('dir not found')
+
+    def filter_list_dir(self, file_list, rule):
+        pass
+
+    def move_file(self, src, dst):
+        if not os.path.isdir(dst):
+            dst_dir = os.path.dirname(dst)
+        else:
+            dst_dir = dst
+        if not os.path.exists(dst_dir):
+            os.makedirs(dst)
+        if os.path.exists(src):
+            shutil.move(src, dst)
+
+    def dir_split(self, file_name, step = 2):
+        L = file_name.split(os.path.sep)
+        if len(L) > 1:
+            return os.path.sep.join(L[-2:])
+        raise Exception('check if file path is valid')
+
+class DataProvider:
+    def __init__(self):
+        self.fMgr = FileMgr()
+
+    def get_ttr_paths(self):
+        if len(ttrs) > 2:
+            return ttrs[:-1]
+        return None
+
+    def switch_workspace(self, src_dir, dst_dir):
+        file_list = self.fMgr.list_dir(src_dir)
+        if len(file_list) > 2:
+            file_list = file_list[:-1]
+            for f in file_list:
+                dst = os.path.seq.join([dst_dir, self.Mgr.dir_split(f)])
+                self.fMgr.move_file(f, dst)
+        
 
 paramMap = dict()
 def ajax_serviceDir_query():

@@ -31,4 +31,7 @@ linux remote visit each other without password:
 	HOST A:
 	ssh-keygen
 	ssh-copy-id user@HOST_B
+
+linux分卷压缩
+	zip -s 100 anaconda3.tar.gz.zip anaconda3.tar.gz 每卷100M
 	
