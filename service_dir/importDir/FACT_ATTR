@@ -1,4 +1,5 @@
-_id,name,type_id,value,attr_set_id
-1,attr1,1,xxx,1
-2,attr2,2,yyy,2
-3,attr3,3,zzz,2
+type_id,value,_id,name,attr_set_id
+1,xxx,1,attr1,1
+2,yyy,2,attr2,2
+3,rampage,3,attr3,1
+6,test,4,attr4,2

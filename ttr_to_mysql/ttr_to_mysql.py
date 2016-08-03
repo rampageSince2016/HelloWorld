@@ -53,7 +53,7 @@ class FileMgr:
             return (parts[0], int(parts[1]))
 
         if os.path.exists(dir_name):
-            file_list = sorted(os.listdir(dir_name), key = lambda x: numerial_order(x))
+            file_list = sorted([i for i in os.listdir(dir_name) if i.endswith('spz')], key = lambda x: numerial_order(x))
             file_path_list = list(map(lambda f: os.path.sep.join([dir_name, f]), file_list))
             return file_path_list
         raise Exception('dir not found')
@@ -105,32 +105,26 @@ class MysqlMgr:
             raise
 
     def insertData(self, dataList):
-        self.connect()
-        try:
-            keyList = [i['field'] for i in FIELD_LIST] + ['req_time', 'res_time']
-            D = dict()
-            for subItem in dataList:
-                if not subItem.get('RRA'):
-                    continue
-                if subItem.get('RRA').lower() == 'req':
-                    D['req_time'] = datetime.datetime.fromtimestamp(float(subItem['ts']))
-                if subItem.get('RRA').lower() == 'resp':
-                    D['res_time'] = datetime.datetime.fromtimestamp(float(subItem['ts']))
-                for fieldItem in FIELD_LIST:
-                    if not D.get(fieldItem['field']):
-                        D[fieldItem['field']] = subItem.get(fieldItem['field'])
-            pos_vals = ','.join(['%s' for i in range(len(keyList))])
-            pos_fields = '(id, ' + ','.join(keyList) + ')'
-            L = list()
-            for key in keyList:
-                L.append(D.get(key))
-            sql = 'insert into {} {} values (null, {})'.format(TABLE_NAME, pos_fields, pos_vals)
-            self.cursor.execute(sql, tuple(L))
-            self.conn.commit()
-        except:
-            print(traceback.format_exc())
-        finally:
-            self.close()
+        keyList = [i['field'] for i in FIELD_LIST] + ['req_time', 'res_time']
+        D = dict()
+        for subItem in dataList:
+            if not subItem.get('RRA'):
+                continue
+            if subItem.get('RRA').lower() == 'req':
+                D['req_time'] = datetime.datetime.fromtimestamp(float(subItem['ts']))
+            if subItem.get('RRA').lower() == 'resp':
+                D['res_time'] = datetime.datetime.fromtimestamp(float(subItem['ts']))
+            for fieldItem in FIELD_LIST:
+                if not D.get(fieldItem['field']):
+                    D[fieldItem['field']] = subItem.get(fieldItem['field'])
+        pos_vals = ','.join(['%s' for i in range(len(keyList))])
+        pos_fields = '(id, ' + ','.join(keyList) + ')'
+        L = list()
+        for key in keyList:
+            L.append(D.get(key))
+        sql = 'insert into {} {} values (null, {})'.format(TABLE_NAME, pos_fields, pos_vals)
+        self.cursor.execute(sql, tuple(L))
+        self.conn.commit()
 
 
 class DataMgr:
@@ -168,16 +162,20 @@ class DataMgr:
         finally:
             out.close()
 
-    def get_raw_record_inserted(self, item):
-        raw_record = item.get('_raw_records')
-        if raw_record:
-            self.sqlMgr.insertData(raw_record)
-
     def start_tasks(self):
         tasklist = self.fMgr.list_dir(BPC_TTR_DIR)
-        for file_name in tasklist:
-            for item in self.snappy_unpack(file_name):
-                self.get_raw_record_inserted(item)
+        self.sqlMgr.connect()
+        try:
+            for file_name in tasklist:
+                for item in self.snappy_unpack(file_name):
+                    raw_record = item.get('_raw_records')
+                    if raw_record:
+                        self.sqlMgr.insertData(raw_record)
+        except:
+            print(traceback.format_exc())
+        finally:
+            self.sqlMgr.close()
+                
 
 class InteractiveMsg(DataMgr):
     def diplay_pack(self, in_file):

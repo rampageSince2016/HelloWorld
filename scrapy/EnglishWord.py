@@ -18,14 +18,14 @@ class Const:
         if not os.path.exists(Const.EW_PATH):
             raise Exception('{} not found!'.format(Const.EW_PATH))
         L = [i for i in os.listdir(Const.EW_PATH)]
-        girl_nums = range(1, len(L) + 1)
-        selector = list(zip(girl_nums, sorted(L)))
+        file_nums = range(1, len(L) + 1)
+        selector = list(zip(file_nums, sorted(L)))
         for item in selector:
             print('\t{}\t:\t{}'.format(*item))
         print('\tother\t:\trandom select')
-        lucky_one = int(input('select a girl to dance:'))
-        if (not lucky_one) or (lucky_one not in girl_nums):
-            lucky_one = random.choice(girl_nums)
+        lucky_one = int(input('select a file'))
+        if (not lucky_one) or (lucky_one not in file_nums):
+            lucky_one = random.choice(file_nums)
         lucky_one = os.path.sep.join([Const.EW_PATH, selector[int(lucky_one) - 1][1]])
         with open(lucky_one, 'r') as f:
             for line in f:

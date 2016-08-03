@@ -4,7 +4,8 @@ from treelib import Tree
 
 import msgpack
 import json
-import os, shutil
+import os, shutil, time
+import traceback
 import csv
 
 DB_INFO = {
@@ -92,42 +93,173 @@ class MongoBase:
         return rs
 
 
-class Authority:
-    def __init__(self):
-        pass
+class UserCache(MongoBase):
+    DIR_TAB_FILTER = ['FACT_ATTR_SET', 'FACT_SCENE', 'FACT_SERVICE', 'FACT_ATTR', 'DIM_TYPE']
 
-    def check_write(self, user):
-        if os.path.exists('dir_service_lock'):
-            return False
-        return True
-
-class MongoTransaction(MongoBase):
-    def __init__(self):
+    def __init__(self, user):
         super().__init__()
+        self.user = user
+        self.cache_table_prefix = user
 
-    def check_cache(self, user):
-        self.connectMongo()
+    def check_user_saved(self):
+        for table_name in self.baseDb.collection_names():
+            if table_name in self.DIR_TAB_FILTER:
+                if self.db['_'.join(['saved', self.cache_table_prefix , table_name])].find_one():
+                    return True
+        return False
+
+    def drop_saved_tables(self):
+        dir_tab_list = list(map(lambda x: '_'.join(['saved', self.cache_table_prefix, x]), self.DIR_TAB_FILTER))
+        for table_name in self.db.collection_names():
+            if table_name in dir_tab_list:
+                self.db[table_name].drop()
+
+
+    def save_tables(self):
+        self.drop_saved_tables()
+        L = list(filter(lambda x: x.startswith(self.cache_table_prefix), self.db.collection_names()))
+        for tab in L:
+            for item in self.db[tab].find():
+                table_name = tab.split(self.cache_table_prefix + '_')[1]
+                saved_table_name = '_'.join(['saved', self.cache_table_prefix, table_name])
+                self.db[saved_table_name].insert(item)
+
+
+    def read_saved_table(self):
+        table_prefix = '_'.join(['saved', self.cache_table_prefix])
+        L = list(filter(lambda x: x.startswith(table_prefix)))
+        self.del_cache_table()
+        for tab in L:
+            table_name = tab[6:]
+            for item in self.db[tab].find():
+                self.db[table_name].insert(item)
+
+
+    def copy_table(self):
+        for table_name  in self.baseDb.collection_names():
+            if table_name in self.DIR_TAB_FILTER:
+                for item in self.baseDb[table_name].find():
+                    new_tab_name = '_'.join([self.cache_table_prefix, table_name])
+                    self.db[new_tab_name].insert(item)
+
+
+    def check_table(self):
+        for table_name in self.db.collection_names():
+            if table_name.startswith(self.cache_table_prefix):
+                return True
+        return False
+
+
+    def del_cache_table(self):
+        cache_tabs = list(map(lambda x: '_'.join([self.cache_table_prefix, x]), self.DIR_TAB_FILTER))
+        for table_name in self.db.collection_names():
+            if table_name in cache_tabs:
+                self.db[table_name].drop()
+
+
+class MongoTransaction(UserCache):
+    def __init__(self, user):
+        user = str(user)
+        super().__init__(user)
+        self.lock_path = os.path.abspath('.')
+        self.lock_file_name = os.path.join(self.lock_path, '.dir_service_lock')
+        self.user = user
+
+    def refresh_cache(self):
+        self.del_cache_table()
+        self.copy_table()
+
+    def commit(self):
+        if not self.acquired():
+            return False
         try:
-            pass
+            if self.check_table():
+                for table_name in self.db.collection_names():
+                    if table_name.startswith(self.user):
+                        field_head_start = len(self.user) + 1
+                        self.baseDb[table_name[field_head_start:]].drop()
+                        for item in self.db[table_name].find():
+                            self.baseDb[table_name[field_head_start:]].insert(item)
+        except:
+            print(traceback.format_exc())
+            return False
+        else:
+            return True
         finally:
-            self.close()
+            self.release()
 
-    def commit(self, user):
-        pass
+    def __check_lock(self):
+        if os.path.exists(self.lock_file_name):
+            with open(self.lock_file_name, 'r') as f:
+                L = next(f).strip().split('=')
+                if len(L) > 1:
+                    if L[1] == self.user:
+                        return False
+            return True
+        else:
+            return False
 
-    def acquired(self, user):
-        pass
+    def acquired(self, time_out = 1):
+        print(self.user, 'ask for lock...')
+        if time_out <= 0:
+            print('time out!')
+            return False
+        if self.__check_lock():
+            time.sleep(0.2)
+            time_out = time_out - 0.2
+            return self.acquired(time_out = time_out)
+        else:
+            print('no lock')
+            with open(self.lock_file_name, 'w') as f:
+                f.write('owner={}'.format(self.user))
+            return True
 
-    def release(self, user):
-        pass
+    def release(self):
+        if not self.__check_lock():
+            try:
+                if os.path.exists(self.lock_file_name):
+                    os.system('rm -f {}'.format(self.lock_file_name))
+            except:
+                raise
 
-    def save(self, user, data):
-        pass
+    def modify_from_client(self, table, data):
+        #一次只能改一张表
+        print(table)
+        pprint(data)
+        table_name = '_'.join([self.cache_table_prefix, table])
+        for item in data:
+            if not item.get('_id'):
+                nosql = [{'$group':{
+                    '_id': None,
+                    'id': {'$max': '$_id'}
+                    }}]
+                idxList = list(self.find(table_name, nosql = nosql))
+                if len(idxList) < 1:
+                    idx = 1
+                else:
+                    idx = idxList[0]['id'] + 1
+                item['_id'] = idx
+                self.db[table_name].insert(item)
+            elif self.db[table_name].find_one(item['_id']):
+                self.db[table_name].update(
+                    {'_id': item['_id']} ,
+                    item
+                )
+            else:
+                self.db[table_name].insert(item)
+
+    def del_from_client(self, table, data):
+        table_name = '_'.join([self.cache_table_prefix, table])
+        for item in data:
+            if item.get('_id'):
+                self.db[table_name].remove(id = item['_id'])
+            else:
+                raise Exception('没有指定_id不能删除数据')
 
 
 class ServiceDir(MongoTransaction):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, user):
+        super().__init__(user)
 
     def createIdx(self):
         self.db[Const.FACT_SCENE['tabName']].ensure_index(Const.FACT_SCENE['foreignKey'])
@@ -157,29 +289,28 @@ class ServiceDir(MongoTransaction):
                         for k, v in row.items():
                             if k.find('id') > -1:
                                 row[k] = int(v)
-                        if self.find(f, match = {'_id': row['_id']}):
+                        if self.baseDb[f].find_one({'_id': row['_id']}):
                             self.baseDb[f].update({
                                 '_id' : row['_id']
                                 }, {
                                     '$set': row
                                 })
                         else:
-                            self.db[f].insert(row)
-            self.createIdx()
+                            self.baseDb[f].insert(row)
         finally:
             self.close()
 
 
     def all_tree_sql(self):
         L_SCENE = {'$lookup':{
-            'from': 'FACT_SCENE',
+            'from': '_'.join([self.user, 'FACT_SCENE']),
             'localField': '_id',
             'foreignField':Const.FACT_SCENE['foreignKey'],
             'as': 'scene'
         }}
         U_SCENE = {'$unwind': {'path': '$scene', 'preserveNullAndEmptyArrays': True }}
         L_ATTR_SET = {'$lookup': {
-            'from': 'FACT_ATTR_SET',
+            'from': '_'.join([self.user, 'FACT_ATTR_SET']),
             'localField': 'scene._id',
             'foreignField': Const.FACT_ATTR_SET['foreignKey'],
             'as': 'attr_set'
@@ -189,7 +320,7 @@ class ServiceDir(MongoTransaction):
             'preserveNullAndEmptyArrays': True
         }}
         L_ATTR = {'$lookup': {
-            'from': 'FACT_ATTR',
+            'from': '_'.join([self.user, 'FACT_ATTR']),
             'localField': 'attr_set._id',
             'foreignField': Const.FACT_ATTR['foreignKey'],
             'as': 'attr'
@@ -262,7 +393,7 @@ class ServiceDir(MongoTransaction):
         self.connectMongo()
         try:
             nosql = self.all_tree_sql()
-            rs = self.find(Const.FACT_SERVICE_DIR['tabName'], nosql = nosql)
+            rs = self.find('_'.join([self.user, Const.FACT_SERVICE_DIR['tabName']]), nosql = nosql)
             tree = self.generate_dir_tree(rs)
             if tree:
                 if to_dict:
@@ -278,7 +409,7 @@ class ServiceDir(MongoTransaction):
         self.connectMongo()
         try:
             nosql = self.all_tree_sql()
-            rs = self.find(Const.FACT_SERVICE['tabName'], nosql = nosql)
+            rs = self.find('_'.join([self.user, Const.FACT_SERVICE['tabName']]), nosql = nosql)
             tree = self.generate_leaf_tree(rs)
             if tree:
                 if to_dict:
@@ -306,7 +437,7 @@ class ServiceDir(MongoTransaction):
                     raise Exception('传入的tree_index解析出错')
                 last_one = key_values[-1]
                 match = {last_one[0]: last_one[1]}
-                table = Const.SEQ[len(key_values) - 1]['tabName']
+                table = '_'.join([self.user, Const.SEQ[len(key_values) - 1]['tabName']])
                 self.db[table].remove(match)
         finally:
             self.close()
@@ -317,7 +448,7 @@ class ServiceDir(MongoTransaction):
         try:
             ids = [int(i) for i in parent_id.split(os.path.sep) if i != 'root']
             if not ids:
-                table = Const.SEQ[0]['tabName']
+                table = '_'.join([self.user, Const.SEQ[0]['tabName']])
                 idx = None
                 nosql = [{'$group':{
                     '_id': None,
@@ -335,7 +466,7 @@ class ServiceDir(MongoTransaction):
             last_one = key_values[-1]
             if len(key_values) >= len(Const.SEQ):
                 raise Exception('叶子上加不了节点')
-            table = Const.SEQ[len(key_values)]['tabName']
+            table = '_'.join([self.user, Const.SEQ[len(key_values)]['tabName']])
             foreignKey = Const.SEQ[len(key_values)]['foreignKey']
             idx = None
             nosql = [{'$group':{
@@ -360,7 +491,7 @@ class ServiceDir(MongoTransaction):
             if ids:
                 name_id_match = tuple(zip([y['_id'] for y in Const.SEQ], ids))
                 last_one = name_id_match[-1]
-                table = Const.SEQ[len(name_id_match) - 1]['tabName']
+                table = '_'.join([self.user, Const.SEQ[len(name_id_match) - 1]['tabName']])
                 new_val_dict['_id'] = ids[-1]
                 self.db[table].update({
                     '_id': ids[-1]
@@ -465,7 +596,7 @@ def ajax_serviceDir_Types():
     
 
 if __name__ == '__main__':
-    sd = ServiceDir()
+    sd = ServiceDir('tester')
     sd.connectMongo()
     sd.client.drop_database(DB_INFO['DB_NAME'])
     sd.importTab()
