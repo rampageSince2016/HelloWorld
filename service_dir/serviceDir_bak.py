@@ -169,8 +169,8 @@ class MongoTransaction(UserCache):
         self.del_cache_table()
         self.copy_table()
 
-    def commit(self, branch):
-        if not self.acquired(branch):
+    def commit(self):
+        if not self.acquired():
             return False
         try:
             if self.check_table():
@@ -186,47 +186,41 @@ class MongoTransaction(UserCache):
         else:
             return True
         finally:
-            self.release(branch)
+            self.release()
 
-    def __check_lock(self, branch):
+    def __check_lock(self):
         if os.path.exists(self.lock_file_name):
             with open(self.lock_file_name, 'r') as f:
-                for row in f:
-                    row = row.strip()
-                    if row:
-                        row_elem_list = row.split('&')
-                        if row_elem_list[0] == branch:
-                            if row_elem_list[1] == self.user:
-                                return False
+                L = next(f).strip().split('=')
+                if len(L) > 1:
+                    if L[1] == self.user:
+                        return False
             return True
         else:
             return False
 
-    def acquired(self, branch, time_out = 1):
+    def acquired(self, time_out = 1):
         print(self.user, 'ask for lock...')
         if time_out <= 0:
             print('time out!')
             return False
-        if self.__check_lock(branch):
+        if self.__check_lock():
             time.sleep(0.2)
-            time_out -= 0.2
-            return self.acquired(branch, time_out = time_out)
+            time_out = time_out - 0.2
+            return self.acquired(time_out = time_out)
         else:
             print('no lock')
-            with open(self.lock_file_name, 'a') as f:
-                f.write('&'.join([branch, self.user]))
+            with open(self.lock_file_name, 'w') as f:
+                f.write('owner={}'.format(self.user))
             return True
 
-    def release(self, branch):
-        if not self.__check_lock(branch):
-            newL = list()
-            with open(self.lock_file_name, 'r') as f:
-                L = f.readlines()
-                newL = list(filter(lambda x: x.strip().split('&') != (branch, self.user), L))
-            with open(self.lock_file_name, 'w') as wf:
-                for row in newL:
-                    wf.write(row)
-                    wf.write('\n')
+    def release(self):
+        if not self.__check_lock():
+            try:
+                if os.path.exists(self.lock_file_name):
+                    os.system('rm -f {}'.format(self.lock_file_name))
+            except:
+                raise
 
     def modify_from_client(self, table, data):
         #一次只能改一张表
@@ -271,6 +265,19 @@ class ServiceDir(MongoTransaction):
         self.db[Const.FACT_SCENE['tabName']].ensure_index(Const.FACT_SCENE['foreignKey'])
         self.db[Const.FACT_ATTR_SET['tabName']].ensure_index(Const.FACT_ATTR_SET['foreignKey'])
         self.db[Const.FACT_ATTR['tabName']].ensure_index(Const.FACT_ATTR['foreignKey'])
+
+        
+    def exportTab(self):
+        self.connectMongo()
+        try:
+            for tab in self.db.collection_names():
+                fpath = os.path.sep.join([os.path.abspath(Const.DATA_OUT), tab])
+                with open(fpath, 'w') as f_out:
+                    pass
+                list(self.find())
+        finally:
+            self.close()
+        
 
     def importTab(self):
         self.connectMongo()
@@ -370,30 +377,16 @@ class ServiceDir(MongoTransaction):
                     str(item.get('attr_set', {}).get('_id')),
                     str(item.get('attr', {}).get('_id'))
             ]
-            descriptions = [
-                item.get('description'),
-                item.get('scene', {}).get('description'),
-                item.get('attr_set', {}).get('description'),
-                item.get('attr', {}).get('description')
-            ]
             while None in treePath:
                 treePath.remove(None)
             while None in idPath:
                 idPath.remove(None)
-            description = None
-            for dscr in reversed(descriptions):
-                if dscr:
-                    description = dscr
             for i in range(1, len(treePath) + 1):
                 treePathLink = os.path.sep.join(['root'] + treePath[:i])
                 treeIdPath = os.path.sep.join(['root'] + idPath[:i])
                 if not t.get_node(treePathLink):
                     parent_path, node_name = os.path.split(treePathLink)
-                    t.create_node(node_name, treePathLink, parent=parent_path,
-                                  data=(treeIdPath,
-                                        item.get('attr', {}).get('value'),
-                                        description
-                                  ))
+                    t.create_node(node_name, treePathLink, parent=parent_path, data=(treeIdPath, item.get('attr', {}).get('value')))
         return t
 
     def get_dir_tree(self,to_dict=True):
@@ -450,7 +443,7 @@ class ServiceDir(MongoTransaction):
             self.close()
 
 
-    def create_branch(self, parent_id, node_name, description = None):
+    def create_branch(self, parent_id, node_name):
         self.connectMongo()
         try:
             ids = [int(i) for i in parent_id.split(os.path.sep) if i != 'root']
@@ -466,7 +459,7 @@ class ServiceDir(MongoTransaction):
                     idx = 1
                 else:
                     idx = idxList[0]['id'] + 1
-                item = {'_id': idx, 'name': node_name, 'description': description}
+                item = {'_id': idx, 'name': node_name}
                 self.db[table].insert(item)
                 return
             key_values = tuple(zip([y['_id'] for y in Const.SEQ], ids))
@@ -485,7 +478,7 @@ class ServiceDir(MongoTransaction):
                 idx = 1
             else:
                 idx = idxList[0]['id'] + 1
-            item = {'_id': idx, foreignKey: last_one[1], 'name': node_name, '#': description}
+            item = {'_id': idx, foreignKey: last_one[1], 'name': node_name}
             self.db[table].insert(item)
         finally:
             self.close()
@@ -536,87 +529,71 @@ class FileMgr:
             return os.path.sep.join(L[-2:])
         raise Exception('check if file path is valid')
 
+class DataProvider:
+    def __init__(self):
+        self.fMgr = FileMgr()
 
-LoginUser = 'tester'
+    def get_ttr_paths(self):
+        if len(ttrs) > 2:
+            return ttrs[:-1]
+        return None
+
+    def switch_workspace(self, src_dir, dst_dir):
+        file_list = self.fMgr.list_dir(src_dir)
+        if len(file_list) > 2:
+            file_list = file_list[:-1]
+            for f in file_list:
+                dst = os.path.seq.join([dst_dir, self.Mgr.dir_split(f)])
+                self.fMgr.move_file(f, dst)
+        
+
 paramMap = dict()
-
-def get_scene_id(_id):
-    levels = _id.split(os.path.sep)
-    if len(levels) > 2:
-        return os.path.sep.join(levels[:3])
-    raise Exception('传入的树_id: {}没有包含到场景'.format(_id))
-
 def ajax_serviceDir_query():
-    parentId = paramMap.get('parentId')
-    user = LoginUser
-    sd = ServiceDir(user)
+    paramMap = {'level': 5}
+    level = paramMap.get('level')
+    if not level:
+         raise Exception('没有传入目录列表的层次序号')
+    sd = ServiceDir()
     tree = sd.get_tree(to_dict=False)
-    #tree.show()
-    #pprint([i.data for i in tree.nodes.values()])
-    data = [(tree.level(i.identifier),i) for i in tree.nodes.values() if i.data[0].startswith(parentId)]
-    return [{'text': i[1].tag, '_id':i[1].data[0], 'value': i[1].data[1], 'description': i[1].data[2]} for i in data]
+    tree.show()
+    data = [(tree.level(i.identifier),i) for i in tree.nodes.values()]
+    data = sorted(filter(lambda y: y[0] == int(level), data), key = lambda x: x[0])
+    return [{'text': i[1].tag, '_id':i[1].data[0], 'value': i[1].data[1]} for i in data]
 
 def ajax_serviceDir_modify():
-    user = LoginUser
-    sd = ServiceDir(user)
+    new_val_dict = {'_id': 1, 'name':'属性1', 'type_id': 1, 'value': 100, 'attr_set_id': 1}
+    paramMap = {'_id': 'root/1/1/1/1', 'set_value': new_val_dict}
+    sd = ServiceDir()
     _id = paramMap.get('_id')
-    scene_id_to_lock = get_scene_id(_id)
-    if not sd.acquired(scene_id_to_lock):
-        return {'msg': '{} has been locked'.format(scene_id_to_lock), 'status': 1}
     set_value = paramMap.get('set_value')
     if not _id or not set_value:
         raise Exception('输入参数为空')
     sd.modify_branch(_id, set_value)
-    return {'msg': '{} in cache has been modify'.format(scene_id_to_lock), 'status': 0}
 
 def ajax_serviceDir_del():
+    paramMap = {'_id': 'root/1/1/1'}
     _id = paramMap.get('_id')
-    scene_id_to_lock = get_scene_id(_id)
-    user = LoginUser
-    sd = ServiceDir(user)
-    if not sd.acquired(scene_id_to_lock):
-        return {'msg': '{} has been locked'.format(scene_id_to_lock), 'status': 1}
+    if not _id:
+        raise Exception('输入参数为空')
+    sd = ServiceDir()
     sd.del_branch(_id)
-    return {'msg': '{} in cache has been modify'.format(scene_id_to_lock), 'status': 0}
 
 def ajax_serviceDir_create():
-    parentId = paramMap['parentId']
-    scene_id_to_lock = get_scene_id(parentId)
+    paramMap = {'_id': 'root', 'node_name': '新增'}
+    _id = paramMap['_id']
     node_name = paramMap['node_name']
-    user = LoginUser
-    sd = ServiceDir(user)
-    if not sd.acquired(scene_id_to_lock):
-        return {'msg': '{} has been locked'.format(scene_id_to_lock), 'status': 1}
-    sd.create_branch(parentId, node_name)
-    return {'msg': '{} in cache has been modify'.format(scene_id_to_lock), 'status': 0}
+    sd = ServiceDir()
+    sd.create_branch(_id, node_name)
 
 def ajax_serviceDir_Types():
     mb = MongoBase()
     mb.connectMongo()
-    user = LoginUser
     try:
-        rs = mb.find('_'.join([user, Const.DIM_TYPE['tabName']]))
+        rs = mb.find(Const.DIM_TYPE['tabName'])
         return rs
     finally:
         mb.close()
-
-def ajax_serviceDir_editLock():
-    scene_id = paramMap['scene_id']
-    user = LoginUser
-    sd = ServiceDir(user)
-    sd.acquired(scene_id)
-
-def ajax_serviceDir_editLock_release():
-    scene_id = paramMap['scene_id']
-    user = LoginUser
-    sd = ServiceDir(user)
-    sd.release(scene_id)
-
-
-def ajax_save_edit():
-    user = LoginUser
-    sd = ServiceDir(user)
-    sd.save_tables()
+    
 
 if __name__ == '__main__':
     sd = ServiceDir('tester')

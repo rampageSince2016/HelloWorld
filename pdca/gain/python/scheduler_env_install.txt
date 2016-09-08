@@ -1,0 +1,37 @@
+1. python环境安装
+	在服务器上新建目录: /root/python
+    python安装包放在120.76.30.200的/root/python/anaconda3.tar.gz (已经存在，下同)
+	安装过程:
+		cd /root/python
+		tar -zxvf anaconda3.tar.gz
+		ln -s /root/python/anaconda3/bin/python /usr/lib/sbin/python3
+	测试安装是否成功:
+		console里直接输入: python, 如果提示命令找不到说明路径没指对
+
+
+2. mongodb安装
+    mongo安装包放在120.76.30.200的/root/python/mongodb-linux-x86_64-rhel62-3.2.8.tgz
+	配置文件放在: /root/python/mongodb-linux-x86_64-rhel62-3.2.8/bin/mongod.conf
+	安装过程:
+		mkdir /root/mongoData
+		cd /root/python
+		tar -zxvf mongodb-linux-x86_64-rhel62-3.2.8.tgz
+	运行mongodb:
+		cd /root/python/mongodb-linux-x86_64-rhel62-3.2.8/bin
+		./mongod -f ./mongod.conf
+
+
+3. 调度平台安装:
+	调度平台安装包放在: 120.76.30.200的/root/python/Scheduler.tar.gz
+	安装过程:
+		mysql -uroot -plhDAWANGjiaowolaixun3
+			[mysql] create database Scheduler;
+			[mysql] exit;
+		cd /root/python
+		tar -zxvf Scheduler.tar.gz
+		cd Scheduler/Scheduler/trunk
+		vim conf/master.conf  
+		master.conf是调度平台master的配置信息, 按实际情况修改mysql的信息就可以了
+	运行:
+		cd lib/sc
+		nohup python3 startUp.py MASTER &

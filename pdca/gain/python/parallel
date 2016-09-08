@@ -1,0 +1,15 @@
+怎么设定写入到console的logger?
+import logging
+logger = logging.getLogger()
+logger.setLevel(Logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(message)s')
+
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
+怎么设定写到文件的logger?
+import logging
+logging.basicConfig(filename='example.log', level=logging.DEBUG)
+logging.debug('hello logger!')

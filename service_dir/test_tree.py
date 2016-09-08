@@ -183,7 +183,7 @@ class ServiceDirTest(TestCase):
         #pprint(baseT)
         t1 = SD.get_tree()
         self.assertNotEqual(baseT, t1)
-        commit_rs = SD.commit()        
+        commit_rs = SD.commit('root/1/1')        
         print(commit_rs)
         baseSD.refresh_cache()
         t2 = baseSD.get_tree()
@@ -191,13 +191,5 @@ class ServiceDirTest(TestCase):
         self.assertEqual(t1, t2)
         #self.assertTrue(False)
 
-    def test_20_commit_while_lock_exists(self):
-        with open(SD.lock_file_name, 'w') as f:
-            f.write('owner={}'.format('root'))
-        rec1 = client[DB_INFO['DB_NAME']][Const.FACT_ATTR['tabName']].find_one()
-        rec1['value'] = 10000
-        SD.modify_from_client('FACT_ATTR', [rec1])
-        self.assertTrue(not SD.commit())
-        os.system('rm -f {}'.format(SD.lock_file_name))
 
 

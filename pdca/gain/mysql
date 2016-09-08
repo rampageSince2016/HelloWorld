@@ -1,0 +1,22 @@
+1、 出现了permisson deny的错误。
+    数据目录里面这个库的所有者不是mysql所以无权访问这个库.
+
+2. mysql 启动
+	sudo ./mysqld --defauts-file=my.cnf --user=mysql &
+
+3. mysql 中使用unix_timestamp 等于python里的timestamp
+   mysql 中使用from_unixtime 把时间值传为时间对象
+	mysql时间粒度问题
+	1. 如何自动划分时间为一类
+		(1)转换成时间截，float模式
+			时间截以秒为单位，如果以秒来分组很容易
+			unix_timestamp(datetime_object) --> 以秒为单位的时间截
+			如果以分钟来分组应该 怎么做？
+				以5分钟为例:
+				select floor(unix_timestamp(start_time)/(5*60) + 1)*5*60 from table
+			如果以小时来分组应该怎么做？
+				同上只是5*60换成60*60, 以此类推.
+
+4. mysql备份和恢复
+	mysqldump -S /path/to/mysql.sock -uroot -p123456 cop > cop.sql
+	mysql -uroot -p123456 cop < cop.sql

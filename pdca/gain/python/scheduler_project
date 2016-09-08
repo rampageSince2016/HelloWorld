@@ -1,0 +1,22 @@
+1. 如何使用ipython来测试学习project
+	一些引用包依赖关系不满足，原因是sys.path里不包含引用包的位置
+		如何解决这个问题？
+		增加全路径到PYTHON_PATH中: sys.path.append('/path/to/project') 
+
+2. 容易走神犯困怎么解决?
+	(1) 把所见的东西全部分成一对一的关系进行思考
+	(2) 把结论记录下来， 每次思考完如果有相似的则进行比对
+
+
+
+
+
+一些猜想:
+1. read write lock
+	while one thread get the lock, then the other will not get the lock any way.
+	how to use the thread object to test it?
+		just learn the threading module first!
+
+
+一些结论:
+1. read write lock

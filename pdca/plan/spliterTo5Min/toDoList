@@ -1,0 +1,25 @@
+一、脚本
+1. 入库字段逻辑
+	(1)	ttr中多个字段可配置式取出一份数据存入库>>>done
+	(2)	ttr中多个字段可配置式取出一份数据存入库(测试)>>>done
+	(3) lanzhou服务器的Mysql客户端如果没有加到path>>>pass
+		如果命令跑不通就手动创建表
+	(4) mysql客户端连接服务出现socket问题>>>done
+		mysql -S /path/to/socket -uroot -p123456
+		myql.cnf socket文件是在my.cnf中[mysqld]定义的
+
+2. 动态读取文件逻辑
+	编码完成>>>done
+	测试不通过，缺少文件记录功能>>>done
+	历史文件记录功能编码完成，测试中>>>done
+	动态增加文件功能添加>>>done
+	测试服务器测试通过>>>done
+
+二、python socket接口
+1. 使用flask做数据接口
+	
+
+三、extjs做一个任务细分界面
+
+
+四、告警数据入库bomc

@@ -11,15 +11,15 @@ mysql_cfg = {
     'port': 3306,
     'user': 'root',
     'password': '123456',
-    'database': 'COP',
+    'database': 's3',
     'buffered': True
     }
 
 #ttr的文件目录定义
-BPC_TTR_DIR = '/home/csxxf/work/ttr'
+BPC_TTR_DIR = '/home/csxxf/work/lanzhou/pcap-s3-0804/cap5-银滩CRM前台'
 
 #这个目录下的ttr最后要保存到COP数据库里的表名,可根据不同组件定义到不同表
-TABLE_NAME = 'HALL'
+TABLE_NAME = 'cap5银滩CRM前台'
 
 #这个表需要保存的字段, 不够可自行增加
 FIELD_LIST = [
@@ -29,7 +29,7 @@ FIELD_LIST = [
         {'field':'DestIp','length': 255},
         {'field':'SrcPort','length': 255},
         {'field':'DestPort','length': 255},
-        {'field':'TransType','length': 255},
+        {'field':'TransType','length': 1000},
         {'field':'Uri','length': 1000},
         {'field':'UriPath','length': 1000},
         {'field':'Url','length': 1000},
@@ -57,9 +57,6 @@ class FileMgr:
             file_path_list = list(map(lambda f: os.path.sep.join([dir_name, f]), file_list))
             return file_path_list
         raise Exception('dir not found')
-
-    def filter_list_dir(self, file_list, rule):
-        pass
 
 class MysqlMgr:
     def __init__(self):
@@ -162,6 +159,7 @@ class DataMgr:
         finally:
             out.close()
 
+
     def start_tasks(self):
         tasklist = self.fMgr.list_dir(BPC_TTR_DIR)
         self.sqlMgr.connect()
@@ -184,6 +182,16 @@ class InteractiveMsg(DataMgr):
             pprint(i)
             input('按任意键继续...')
 
+    def to_txt(self, in_file, out_file):
+        rs = self.snappy_unpack(in_file)
+        with open(out_file, 'w') as out:
+            for item in rs:
+                for key, val in item.items():
+                    if isinstance(val, datetime.datetime):
+                        item[key] = val.strftime(TIME_FORMAT)
+                out.write(str(item))
+
+            
 
 def distinct_from_default():
     global FIELD_LIST
@@ -192,12 +200,28 @@ def distinct_from_default():
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
+        print('运行指定文件夹模式...')
         distinct_from_default()
         dm = DataMgr()
         dm.start_tasks()
     elif len(sys.argv) == 2:
-        im = InteractiveMsg()
-        im.diplay_pack(sys.argv[1])
+        print('运行指定文件夹和转txt格式...')
+        if sys.argv[1].lower() == 'txt':
+            im = InteractiveMsg()
+            tasklist = im.fMgr.list_dir(BPC_TTR_DIR)
+            outDir = '/home/csxxf/del/txt'
+            for in_file in tasklist:
+                dir_name = os.path.dirname(in_file)[1:]
+                base_name = os.path.basename(in_file)
+                out_dir_name = os.path.sep.join([outDir, dir_name])
+                if not os.path.exists(out_dir_name):
+                    os.system('mkdir -p {}'.format(out_dir_name))
+                out_file_name = os.path.sep.join([out_dir_name, base_name])
+                out_file_name = out_file_name.strip('.ttr.pack.spz') + '.txt'
+                im.to_txt(in_file, out_file_name)
+        else:
+            im = InteractiveMsg()
+            im.diplay_pack(sys.argv[1])
     else:
         raise Exception('未知参数')
         

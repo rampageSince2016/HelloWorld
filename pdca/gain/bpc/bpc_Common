@@ -16,3 +16,6 @@ liangzhaolan: Gmcc1234
 	rc5.d:
 		把bpc和及其对应的mongod禁止了开机启动
 		S98zen_tao即为禅道的开机自启动
+
+云服务器地址:
+	root@112.74.210.230
