@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>
+        {% block title %}
+        {{ BlogInfo.query.first().title }}
+        {% end block %}
+    </title>
+    {% block stylesheet %}
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    {% end block %}
+
+    {% block script %}
+    <script src="{{ url_for('static', filename='js/jquery.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+    {% end block %}
+</head>
+<body>
+<header>
+    <div class=">
+</body>
+</html>

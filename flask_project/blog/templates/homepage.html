@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+	<head>
+		<title> Blog </title>
+	</head>
+	<body>
+		<h1> Hello {{name}}!</h1>
+		{% if number %}
+		<p> Your number is {{ number|int }} </p>
+		<ul>
+			{% for i in range(number|int) %}
+				{% if i is divisibleby 2 %}
+					<li>{{ i }}</li>
+				{% endif %}
+			{% endfor %}
+		</ul>
+		{% else %}
+			<p> No number specified. </p>
+		{% endif %}
+	</body>
+</html>

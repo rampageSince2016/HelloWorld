@@ -1,0 +1,20 @@
+后台管理
+10.252.21.109/alarm/management/index.html
+
+主页面
+10.252.21.109/alarm/busiMonitor2/index.html
+
+启动平台
+1. cd /opt/yunwei/115_env/Scheduler/bin
+2. ./startupMaster.sh
+   ./startupSlave.sh
+3. 浏览器打开后台管理页面
+4. 双击调度->AlwaysRun->双击默认列表->右键AlwaysRun->启动
+5. 再次双击默认列表，查看调度是否运行正常
+
+
+检查数据库
+1. 数据库名 BUSI_MONIOTR
+2. 表名 EX_BUSINESS
+3. 检查字段　M_QB_status
+4. 运行同目录下的check_mongo.py(python3 check_mongo3.py), 如果输出的结果持续增加那么是正常的，否则有异常.

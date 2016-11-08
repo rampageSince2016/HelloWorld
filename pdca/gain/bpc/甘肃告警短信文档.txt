@@ -1,0 +1,28 @@
+服务器1 IP:
+服务器2 IP:
+服务器3 IP:
+
+数据库名: bpc_alarm, 下面两个脚本的数据库名在配置时必须一致.
+
+1. dataCollector.py运行在三台机器上，角色为数据采集者
+	[1] 分别设置好它们的ttr目录路径和mysql的配置, mysql服务使用服务器3的mysql
+	[2] ttr路径的配置问题:
+		(1) ttr的路径配置只在dataCollector.py里配置，并且根据不同的服务器要设成不同的值
+		(2) ttr配置demo:
+			cmd: vim +18 dataCollector.py
+			vim:
+				ALARM_CSV_DIR_LIST = [
+					'/path/to/cap1',
+					'/path/to/cap2',
+					'/path/to/cap3',
+				]
+	[3] PRE_DATE为首次运行程序时, 让程序知道要从什么时候开始取告警csv. 清除数据库后程序也会使用到这个值.
+
+2. dataReporter.py只运行在服务器3上, 角色为数据报告者.
+	[1] mysql仍然是使用服务器3上的mysql; 
+	[2] 这里需要注意的是要里面有个MAIN_SERVER, 这个是服务指向服务器1的ip, MAIN_SERVER_PORT是服务器1的tomcat的端口; 
+	[3] 运行脚本前要注意一下这个脚本里的TEST参数,如果为True则为测试环境, 此时不要在服务器上运行, 需要改成False才能在服务器上运行（开发过程中有时忘记改）
+	[4] 告警时长设置 TIME_STEP = 10 说明10分钟来一次告警汇总
+	[5] 告警号码设置:
+		(1) 在同目录下打开phone_number.txt
+		(2) 一行一个号码，设置好的号码会收到告警短信。

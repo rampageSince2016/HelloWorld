@@ -1,0 +1,29 @@
+登录生产服务器
+1. 使用teamviewer, 账号密码如下:
+   账号:512461955
+   密码:gmcc1234
+2. 第一台windows
+   帐号/密码: Adminitrator/bpc2009
+2. 使用远程桌面访问第二台windows(地址在历史列表里，40或52结尾的服务器都可以)
+   帐号/密码: liangzhaolan/Gmcc1234
+
+
+后台管理url
+10.252.21.109/alarm/management/index.html
+
+主页面url
+10.252.21.109/alarm/busiMonitor2/index.html
+
+启动平台
+1. cd /opt/yunwei/115_env/Scheduler/bin
+2. ./startupMaster.sh
+3. 浏览器打开后台管理页面
+4. 双击调度->AlwaysRun->双击默认列表->右键AlwaysRun->启动
+5. 再次双击默认列表，查看调度是否运行正常
+
+
+检查数据库
+1. 数据库名 BUSI_MONIOTR
+2. 表名 EX_BUSINESS
+3. 检查字段　M_QB_status
+4. nosql 使用count函数来算: {'M_QB_status': {'$exists': True}, 'end_time':{'$gte': <今天>, '$lt': <明天>}}, 如果算的结果持续增加那么是正常的，否则有异常.

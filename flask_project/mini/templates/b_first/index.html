@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block myheader %}
+<ul>
+{% for item in Attr.query.all() %}
+	<li>{{ item.name }}</li>
+{% endfor %}
+</ul>
+{% endblock %}
+
